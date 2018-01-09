@@ -37,30 +37,10 @@ $app->get('/api/users', function(Request $request, Response $response) {
   }
 });
 
-//Get usersavedbreeds
-$app->get('/api/usersavedbreeds', function(Request $request, Response $response) {
-  $sql = "SELECT * FROM usersavedbreeds";
-  
-  try {
-    //Get DB object
-    $db = new db();
-    //Connect
-    $db = $db->connect();
-
-    $stmt = $db->query($sql);
-    $usersavedbreeds = $stmt->fetchALL(PDO::FETCH_OBJ);
-    $db = null;
-    echo json_encode($usersavedbreeds);
-
-  } catch(PDOException $e) {
-    echo '{"error": {"text": ' . $e->getMessage() . '}';
-  }
-});
-
 //Get saved breeds for a user
-$app->get('/api/user/{id}', function(Request $request, Response $response) {
+$app->get('/api/user/{id}/saved', function(Request $request, Response $response) {
   $id = $request->getAttribute('id');
-  $sql = "SELECT b.breed_name FROM usersavedbreeds AS ub INNER JOIN breeds AS b ON ub.breed_id = b.breed_id";
+  $sql = "SELECT b.breed_name FROM usersavedbreeds AS ub INNER JOIN breeds AS b ON ub.user_id = $id AND ub.breed_id = b.breed_id";
   
   try {
     //Get DB object
@@ -83,7 +63,7 @@ $app->post('/api/users/{id}/save', function(Request $request, Response $response
   $id = $request->getAttribute('id');
   $breed = $request->getParam('breed');
   $sql1 = "INSERT INTO breeds (breed_name) SELECT :breed WHERE NOT EXISTS (SELECT breed_name FROM breeds WHERE breed_name = :breed)";
-  $sql2 = "INSERT INTO usersavedbreeds (user_id, breed_id) SELECT :id, breed_id FROM breeds WHERE breed_name = :breed";
+  $sql2 = "INSERT INTO usersavedbreeds (user_id, breed_id) SELECT :id, b.breed_id FROM breeds AS b WHERE b.breed_name = :breed AND NOT EXISTS (SELECT breed_name FROM usersavedbreeds AS ub INNER JOIN breeds AS b ON ub.breed_id = b.breed_id WHERE b.breed_name = :breed AND ub.user_id = :id)";
   
   try {
     //Get DB object
