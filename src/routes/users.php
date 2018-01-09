@@ -82,8 +82,8 @@ $app->get('/api/user/{id}', function(Request $request, Response $response) {
 $app->post('/api/users/{id}/save', function(Request $request, Response $response) {
   $id = $request->getAttribute('id');
   $breed = $request->getParam('breed');
-  $sql1 = "INSERT INTO breeds (breed_name) VALUES (:breed)";
-  $sql2 = "INSERT INTO usersavedbreeds (user_id, breed_id) SELECT :id, breed_id FROM breeds WHERE breed_name=:breed";
+  $sql1 = "INSERT INTO breeds (breed_name) SELECT :breed WHERE NOT EXISTS (SELECT breed_name FROM breeds WHERE breed_name = :breed)";
+  $sql2 = "INSERT INTO usersavedbreeds (user_id, breed_id) SELECT :id, breed_id FROM breeds WHERE breed_name = :breed";
   
   try {
     //Get DB object
@@ -108,7 +108,54 @@ $app->post('/api/users/{id}/save', function(Request $request, Response $response
     $stmt->execute();
     $db = null;
 
-    echo '{"notice": {"text": "Breed added"}}';
+    echo '{"notice": {"text": "Breed ' . $breed . ' added"}}' ;
+  } catch(PDOException $e) {
+    echo '{"error": {"text": ' . $e->getMessage() . '}}';
+  }
+});
+
+//Get all photos for a breed
+$app->get('/api/breeds/{breed}', function(Request $request, Response $response) {
+  $breed = $request->getAttribute('breed');
+  $sql = "SELECT b.breed_name FROM usersavedbreeds AS ub INNER JOIN breeds AS b ON ub.breed_id = b.breed_id";
+  
+  try {
+    //Get DB object
+    $db = new db();
+    //Connect
+    $db = $db->connect();
+
+    $stmt = $db->query($sql);
+    $usersavedbreeds = $stmt->fetchALL(PDO::FETCH_OBJ);
+    $db = null;
+    echo json_encode($usersavedbreeds);
+
+  } catch(PDOException $e) {
+    echo '{"error": {"text": ' . $e->getMessage() . '}';
+  }
+});
+
+//Save picture for user
+$app->post('/api/users/{id}/picture/save', function(Request $request, Response $response) {
+  $id = $request->getAttribute('id');
+  $picture_url = $request->getParam('picture_url');
+  $sql = "INSERT INTO usersavedpictures (user_id, picture_url) VALUES (:id, :picture_url)";
+  
+  try {
+    //Get DB object
+    $db = new db();
+    //Connect
+    $db = $db->connect();
+
+    $stmt = $db->prepare($sql);
+    
+    $stmt->bindParam(':id', $id);
+    $stmt->bindParam(':picture_url', $picture_url);
+
+    $stmt->execute();
+    $db = null;
+
+    echo '{"notice": {"text": "Picture added"}}' ;
   } catch(PDOException $e) {
     echo '{"error": {"text": ' . $e->getMessage() . '}}';
   }
