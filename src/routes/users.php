@@ -58,6 +58,27 @@ $app->get('/api/user/{id}/saved', function(Request $request, Response $response)
   }
 });
 
+//Get saved pictures for a user
+$app->get('/api/user/{id}/pictures/saved', function(Request $request, Response $response) {
+  $id = $request->getAttribute('id');
+  $sql = "SELECT up.picture_url FROM usersavedpictures AS up WHERE up.user_id = $id";
+  
+  try {
+    //Get DB object
+    $db = new db();
+    //Connect
+    $db = $db->connect();
+
+    $stmt = $db->query($sql);
+    $usersavedpictures = $stmt->fetchALL(PDO::FETCH_OBJ);
+    $db = null;
+    echo json_encode($usersavedpictures);
+
+  } catch(PDOException $e) {
+    echo '{"error": {"text": ' . $e->getMessage() . '}';
+  }
+});
+
 //Save breed for a user
 $app->post('/api/users/{id}/save', function(Request $request, Response $response) {
   $id = $request->getAttribute('id');
@@ -119,7 +140,7 @@ $app->get('/api/breeds/{breed}', function(Request $request, Response $response) 
 $app->post('/api/users/{id}/picture/save', function(Request $request, Response $response) {
   $id = $request->getAttribute('id');
   $picture_url = $request->getParam('picture_url');
-  $sql = "INSERT INTO usersavedpictures (user_id, picture_url) VALUES (:id, :picture_url)";
+  $sql = "INSERT INTO usersavedpictures (user_id, picture_url) SELECT :id, :picture_url WHERE NOT EXISTS (SELECT * FROM usersavedpictures AS up WHERE up.user_id = :id AND up.picture_url = :picture_url)";
   
   try {
     //Get DB object
@@ -138,5 +159,59 @@ $app->post('/api/users/{id}/picture/save', function(Request $request, Response $
     echo '{"notice": {"text": "Picture added"}}' ;
   } catch(PDOException $e) {
     echo '{"error": {"text": ' . $e->getMessage() . '}}';
+  }
+});
+
+//Sign up a user
+$app->post('/api/users/signup', function(Request $request, Response $response) {
+  $user = $request->getParam('user');
+  $pass = $request->getParam('password');
+  $sql = "INSERT INTO users (user_name, user_password) SELECT :user, :pass WHERE NOT EXISTS (SELECT * FROM users AS u WHERE u.user_name = :user AND u.user_password = :pass)";
+  
+  try {
+    //Get DB object
+    $db = new db();
+    //Connect
+    $db = $db->connect();
+
+    $stmt = $db->prepare($sql);
+    
+    $stmt->bindParam(':user', $user);
+    $stmt->bindParam(':pass', $pass);
+
+    $stmt->execute();
+    $db = null;
+
+    echo '{"notice": {"text": "User added"}}' ;
+  } catch(PDOException $e) {
+    echo '{"error": {"text": ' . $e->getMessage() . '}}';
+  }
+});
+
+//Log in
+$app->post('/api/users/login', function(Request $request, Response $response) {
+  $user = $request->getParam('user');
+  $pass = $request->getParam('password');
+  $sql = "SELECT u.user_id FROM users AS u WHERE u.user_name = :user AND u.user_password = :pass";
+  
+  try {
+    //Get DB object
+    $db = new db();
+    //Connect
+    $db = $db->connect();
+
+    $stmt = $db->prepare($sql);
+
+    $stmt->bindParam(':user', $user);
+    $stmt->bindParam(':pass', $pass);
+
+    $stmt->execute();
+
+    $usersavedbreeds = $stmt->fetchALL(PDO::FETCH_OBJ);
+    $db = null;
+    echo json_encode($usersavedbreeds);
+
+  } catch(PDOException $e) {
+    echo '{"error": {"text": ' . $e->getMessage() . '}';
   }
 });
