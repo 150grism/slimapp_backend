@@ -40,7 +40,7 @@ $app->get('/api/users', function(Request $request, Response $response) {
 //Get saved breeds for a user
 $app->get('/api/user/{id}/saved', function(Request $request, Response $response) {
   $id = $request->getAttribute('id');
-  $sql = "SELECT b.breed_name FROM usersavedbreeds AS ub INNER JOIN breeds AS b ON ub.user_id = $id AND ub.breed_id = b.breed_id";
+  $sql = "SELECT ub.userbreed_id, b.breed_name, b.subbreed_name FROM usersavedbreeds AS ub INNER JOIN breeds AS b ON ub.user_id = $id AND ub.breed_id = b.breed_id";
   
   try {
     //Get DB object
@@ -61,7 +61,7 @@ $app->get('/api/user/{id}/saved', function(Request $request, Response $response)
 //Get saved pictures for a user
 $app->get('/api/user/{id}/pictures/saved', function(Request $request, Response $response) {
   $id = $request->getAttribute('id');
-  $sql = "SELECT up.picture_url FROM usersavedpictures AS up WHERE up.user_id = $id";
+  $sql = "SELECT  up.userpicture_id, b.breed_name, b.subbreed_name, up.picture_url FROM usersavedpictures AS up INNER JOIN breeds AS b ON up.breed_id = b.breed_id WHERE up.user_id = $id";
   
   try {
     //Get DB object
@@ -83,8 +83,9 @@ $app->get('/api/user/{id}/pictures/saved', function(Request $request, Response $
 $app->post('/api/users/{id}/save', function(Request $request, Response $response) {
   $id = $request->getAttribute('id');
   $breed = $request->getParam('breed');
-  $sql1 = "INSERT INTO breeds (breed_name) SELECT :breed WHERE NOT EXISTS (SELECT breed_name FROM breeds WHERE breed_name = :breed)";
-  $sql2 = "INSERT INTO usersavedbreeds (user_id, breed_id) SELECT :id, b.breed_id FROM breeds AS b WHERE b.breed_name = :breed AND NOT EXISTS (SELECT breed_name FROM usersavedbreeds AS ub INNER JOIN breeds AS b ON ub.breed_id = b.breed_id WHERE b.breed_name = :breed AND ub.user_id = :id)";
+  $subbreed = $request->getParam('subbreed');
+  $sql1 = "INSERT INTO breeds (breed_name, subbreed_name) SELECT :breed, :subbreed WHERE NOT EXISTS (SELECT breed_name FROM breeds AS b WHERE b.breed_name = :breed AND b.subbreed_name = :subbreed)";
+  $sql2 = "INSERT INTO usersavedbreeds (user_id, breed_id) SELECT :id, b.breed_id FROM breeds AS b WHERE b.breed_name = :breed AND b.subbreed_name = :subbreed AND NOT EXISTS (SELECT breed_name FROM usersavedbreeds AS ub INNER JOIN breeds AS b ON ub.breed_id = b.breed_id WHERE b.breed_name = :breed AND b.subbreed_name = :subbreed AND ub.user_id = :id)"; 
   
   try {
     //Get DB object
@@ -97,6 +98,7 @@ $app->post('/api/users/{id}/save', function(Request $request, Response $response
     
     // $stmt->bindParam(':id', $id);
     $stmt->bindParam(':breed', $breed);
+    $stmt->bindParam(':subbreed', $subbreed);
 
     $stmt->execute();
 
@@ -105,6 +107,7 @@ $app->post('/api/users/{id}/save', function(Request $request, Response $response
     
     $stmt->bindParam(':id', $id);
     $stmt->bindParam(':breed', $breed);
+    $stmt->bindParam(':subbreed', $subbreed);
 
     $stmt->execute();
     $db = null;
@@ -139,8 +142,11 @@ $app->get('/api/breeds/{breed}', function(Request $request, Response $response) 
 //Save picture for user
 $app->post('/api/users/{id}/picture/save', function(Request $request, Response $response) {
   $id = $request->getAttribute('id');
+  $breed = $request->getParam('breed');
+  $subbreed = $request->getParam('subbreed');
   $picture_url = $request->getParam('picture_url');
-  $sql = "INSERT INTO usersavedpictures (user_id, picture_url) SELECT :id, :picture_url WHERE NOT EXISTS (SELECT * FROM usersavedpictures AS up WHERE up.user_id = :id AND up.picture_url = :picture_url)";
+  $sql1 = "INSERT INTO breeds (breed_name, subbreed_name) SELECT :breed, :subbreed WHERE NOT EXISTS (SELECT breed_name FROM breeds AS b WHERE b.breed_name = :breed AND b.subbreed_name = :subbreed)";
+  $sql2 = "INSERT INTO usersavedpictures (user_id, breed_id, picture_url) SELECT :id, b.breed_id, :picture_url FROM breeds AS b WHERE b.breed_name = :breed AND b.subbreed_name = :subbreed AND NOT EXISTS (SELECT * FROM usersavedpictures AS up WHERE up.user_id = :id AND up.picture_url = :picture_url)";
   
   try {
     //Get DB object
@@ -148,9 +154,21 @@ $app->post('/api/users/{id}/picture/save', function(Request $request, Response $
     //Connect
     $db = $db->connect();
 
-    $stmt = $db->prepare($sql);
+    //1
+    $stmt = $db->prepare($sql1);
+
+    // $stmt->bindParam(':id', $id);
+    $stmt->bindParam(':breed', $breed);
+    $stmt->bindParam(':subbreed', $subbreed);
+
+    $stmt->execute();
+
+    //2
+    $stmt = $db->prepare($sql2);
     
     $stmt->bindParam(':id', $id);
+    $stmt->bindParam(':breed', $breed);
+    $stmt->bindParam(':subbreed', $subbreed);
     $stmt->bindParam(':picture_url', $picture_url);
 
     $stmt->execute();
@@ -213,5 +231,51 @@ $app->post('/api/users/login', function(Request $request, Response $response) {
 
   } catch(PDOException $e) {
     echo '{"error": {"text": ' . $e->getMessage() . '}';
+  }
+});
+
+//Delete breed for a user
+$app->delete('/api/users/{userbreed_id}/delete', function(Request $request, Response $response) {
+  $userbreed_id = $request->getAttribute('userbreed_id');
+  $sql = "DELETE FROM usersavedbreeds WHERE userbreed_id = $userbreed_id";
+  
+  try {
+    //Get DB object
+    $db = new db();
+    //Connect
+    $db = $db->connect();
+
+    $stmt = $db->prepare($sql);
+
+    $stmt->execute();
+
+    $db = null;
+
+    echo '{"notice": {"text": "Breed deleted"}}' ;
+  } catch(PDOException $e) {
+    echo '{"error": {"text": ' . $e->getMessage() . '}}';
+  }
+});
+
+//Delete picture for a user
+$app->delete('/api/users/{userpicture_id}/picture/delete', function(Request $request, Response $response) {
+  $userpicture_id = $request->getAttribute('userpicture_id');
+  $sql = "DELETE FROM usersavedpictures WHERE userpicture_id = $userpicture_id";
+  
+  try {
+    //Get DB object
+    $db = new db();
+    //Connect
+    $db = $db->connect();
+
+    $stmt = $db->prepare($sql);
+
+    $stmt->execute();
+
+    $db = null;
+
+    echo '{"notice": {"text": "Picture deleted"}}' ;
+  } catch(PDOException $e) {
+    echo '{"error": {"text": ' . $e->getMessage() . '}}';
   }
 });
